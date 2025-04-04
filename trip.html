@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Filip's Ålesund Trip</title>
+  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+  <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />
+  <style>
+    /* Global styles */
+    body {
+      margin: 0;
+      font-family: 'Georgia', serif;
+      display: flex;
+      height: 100vh;
+      background-color: #f4f2ee;
+    }
+    #sidebar {
+      width: 35%;
+      background-color: #fff9f3;
+      border-right: 2px solid #ddd;
+      padding: 1em;
+      overflow-y: auto;
+      position: relative;
+      z-index: 2;
+    }
+    /* Sidebar screens */
+    #day-selection,
+    #day-details,
+    #destination-details,
+    #fishing-guide,
+    #fishing-detail {
+      display: none;
+    }
+    /* Initially, show day-selection */
+    #day-selection {
+      display: block;
+    }
+    /* Day selection buttons */
+    .day-button {
+      display: block;
+      margin-bottom: 0.5em;
+      padding: 0.6em;
+      background: #dfe9d1;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+      border-radius: 6px;
+      transition: background 0.3s;
+    }
+    .day-button:hover {
+      background: #cbe0b0;
+    }
+    /* Extra button for Fishing Guide */
+    .extra-button {
+      display: block;
+      margin: 1em 0;
+      padding: 0.6em;
+      background: #f0d9a6;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+      border-radius: 6px;
+      transition: background 0.3s;
+    }
+    .extra-button:hover {
+      background: #e8c39b;
+    }
+    /* Destination menu styles */
+    #destination-menu, #fishing-species-menu {
+      margin-top: 1em;
+      border-top: 1px solid #ddd;
+      padding-top: 1em;
+    }
+    .destination-item, .species-item {
+      padding: 0.5em;
+      margin: 0.3em 0;
+      background: #e0e0e0;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    .destination-item:hover, .species-item:hover {
+      background: #d0d0d0;
+    }
+    /* Text containers */
+    .description, .place-info {
+      margin-top: 1em;
+      font-size: 0.95em;
+      line-height: 1.4em;
+      white-space: pre-wrap;
+    }
+    .place-info {
+      font-size: 0.9em;
+      color: #333;
+    }
+    .place-info img {
+      max-width: 100%;
+      margin-top: 0.5em;
+      border-radius: 4px;
+    }
+    /* Back button styles */
+    .back-button {
+      margin-top: 1em;
+      padding: 0.5em 1em;
+      background: #ccc;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    #map {
+      width: 65%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div id="sidebar">
+    <h2>Filip's Ålesund Trip</h2>
+    <!-- Day Selection Screen -->
+    <div id="day-selection">
+      <div id="day-buttons"></div>
+      <!-- Extra button to access Fishing Guide -->
+      <button class="extra-button" id="to-fishing-guide">Fishing Guide</button>
+    </div>
+    <!-- Day Details Screen -->
+    <div id="day-details">
+      <div class="description" id="day-description"></div>
+      <div id="destination-menu"></div>
+      <button class="back-button" id="back-to-days">Back to Day Selection</button>
+    </div>
+    <!-- Destination Details Screen -->
+    <div id="destination-details">
+      <div class="place-info" id="place-info"></div>
+      <button class="back-button" id="back-to-day-details">Back to Day Details</button>
+    </div>
+    <!-- Fishing Guide List Screen -->
+    <div id="fishing-guide">
+      <h3>Fishing Guide</h3>
+      <div id="fishing-species-menu"></div>
+      <button class="back-button" id="back-to-days-from-fishing">Back to Day Selection</button>
+    </div>
+    <!-- Fishing Guide Details Screen -->
+    <div id="fishing-detail">
+      <div class="place-info" id="fishing-info"></div>
+      <button class="back-button" id="back-to-fishing-guide">Back to Fishing Guide</button>
+    </div>
+  </div>
+  <div id="map"></div>
+  
+  <script>
+    /* --- TRIP DATA FOR DAYS --- */
+    const tripData = {
+      "Day 1: Arrival to Cabin": {
+        description: "Day 1: Arrival to Cabin – Select a destination for more details.",
+        locations: [
+          { name: "Lillehammer", coords: [10.469362, 61.117376], info: "Departure from Lillehammer.", image: "" },
+          { name: "Bjorli", coords: [8.198157, 62.261717], info: "Stop at Bjorli – enjoy the scenic views.", image: "https://bjorli.no/wp-content/uploads/2024/08/Bjorli_486c1f5673.jpg" },
+          { name: "Mountain Cabin", coords: [8.234854, 62.261469], info: "Arrival at Mountain Cabin – our cozy retreat.", image: "https://boligpartner-cdn.imgix.net/uploads/boligpartner/06GJ5fA14HmYGZTZCpCQHOVqeWm5F6niHaZjJ6MG.jpg?w=955&h=490&fit=crop&crop=focalpoint&fp-debug=0&auto=format" }
+        ]
+      },
+      "Day 2: Europe's tallest Rock Face and First Fjords": {
+        description: "Day 2: Europe's tallest Rock Face and First Fjords – Select a destination for more details.",
+        locations: [
+          { name: "Mountain Cabin", coords: [8.234854, 62.261469], info: "Our starting point: Mountain Cabin.", image: "https://boligpartner-cdn.imgix.net/uploads/boligpartner/06GJ5fA14HmYGZTZCpCQHOVqeWm5F6niHaZjJ6MG.jpg?w=955&h=490&fit=crop&crop=focalpoint&fp-debug=0&auto=format" },
+          { name: "Slettafossen", coords: [8.077638, 62.324599], info: "A dramatic waterfall showcasing the power of the Rauma River.", image: "https://assets.simpleviewcms.com/simpleview/image/fetch/c_limit,h_1200,q_75,w_1200/https://res.cloudinary.com/djew0njor/image/upload/v1624879938/9nVMIV-e2XpbHXZ1MR-Q4.jpg" },
+          { name: "Kyllingbrua", coords: [8.059606, 62.338036], info: "A 1923 stone railway bridge on the famous Rauma Line, noted for its impressive stonework.", image: "https://assets.simpleviewcms.com/simpleview/image/fetch/c_limit,h_1200,q_75,w_1200/https://res.cloudinary.com/djew0njor/image/upload/v1652340460/Nordvest/Bedrifter/SJ%2520Norge/Raumabanen_SJ_Norge_Kylling_bru_-_photo_Leif_J_Olestad_mbpi5t.jpg" },
+          { name: "Trollveggen", coords: [7.760716, 62.488989], info: "Europe’s tallest vertical rock face, with a dramatic 50-meter overhang.", image: "https://assets.simpleviewcms.com/simpleview/image/fetch/c_fill,h_1080,w_1920/f_jpg/q_65/https://res.cloudinary.com/djew0njor/image/upload/v1624880053/xCv-8XoB-AdchkFxcXi9w.jpg?_a=BATCtdfi0" },
+          { name: "Åndalsnes", coords: [7.6907, 62.5663], info: "A quaint town nestled between fjords and mountains, ideal for a scenic stop.", image: "https://res.cloudinary.com/simpleview/image/upload/v1573655731/clients/norway/rampestreken_viewpoint_andalsnes_northwest_fjord_norway_photo_small_world_production_shutterstock_9fddfcfc-6867-48fc-a35f-6b64030488a4.jpg" },
+          { name: "Vestnes Bridge", coords: [7.116222, 62.611097], info: "A fjord-spanning bridge offering expansive views over the Romsdalsfjord.", image: "https://kommunikasjon.ntb.no/data/images/00176/3fd13775-16d8-4d2f-b897-5f574f252409-w_720.jpg" },
+          { name: "Sjøholt", coords: [6.815643, 62.479797], info: "A picturesque roadside viewpoint with calm fjord landscapes.", image: "https://media.snl.no/media/283042/standard_compressed_25525271367_d9c2237833_o.jpg" },
+          { name: "Moa Shopping Centre", coords: [6.352720, 62.466209], info: "One of Norway’s largest retail hubs, perfect for a break.", image: "https://assets.simpleviewcms.com/simpleview/image/fetch/c_limit,h_1200,q_75,w_1200/https://res.cloudinary.com/djew0njor/image/upload/v1638441430/TUtFR6BIg36cKNhZuGTCs.jpg" },
+          { name: "My House", coords: [6.340769, 62.467673], info: "A cozy residence marking the end of the scenic journey.", image: "" }
+        ]
+      },
+      "Day 3: Ålesund Exploration": {
+        description: "Day 3: Ålesund Exploration – Select a destination for more details.",
+        locations: [
+          { name: "My House", coords: [6.340713, 62.467608], info: "Starting point in Ålesund: My House.", image: "" },
+          { name: "Atlanterhavsparken", coords: [6.096277, 62.465659], info: "Visit Atlanterhavsparken—Ålesund's renowned aquarium with diverse marine exhibits.", image: "https://cdn.prod.website-files.com/5caf09ccb26c804c82df2162/66d80e94be6ffd96fc8e8db6_6.jpg" },
+          { name: "Lamella Ice Cream", coords: [6.157577, 62.472932], info: "Enjoy delicious, homemade ice cream at Lamella, made from fresh Norwegian ingredients.", image: "https://dirqzchonootr.cloudfront.net/media/14962/is-a-lesund-lamella.jpg" },
+          { name: "Fjellstua", coords: [6.164490, 62.474235], info: "Take a short walk to Fjellstua for panoramic views over Ålesund.", image: "https://res.cloudinary.com/djew0njor/image/upload/w_1200,h_630,c_fill/blog-articles/article-02/Aksla-A%CC%8Alesund-foto-Samuel-Taipale-VisitNorwaycom_xbdkxu_ishuyx.jpeg" }
+        ]
+      },
+      "Day 4: Coastal Cities and Atlantic Road": {
+        description: "Day 4: Coastal Cities and Atlantic Road – Select a destination for more details.",
+        locations: [
+          { name: "My House", coords: [6.340769, 62.467673], info: "Starting point: My House.", image: "" },
+          { name: "Molde", coords: [7.160035, 62.738515], info: "In Molde – known as the City of Roses – enjoy panoramic views from Varden and a charming seaside stroll.", image: "https://simolde.no/wp-content/uploads/2024/06/Bilde-av-Molde-1.jpg" },
+          { name: "Atlantic Road", coords: [7.340927, 63.015175], info: "Drive along the Atlantic Road, one of Norway’s most iconic coastal routes with dramatic bridges.", image: "https://imaginary.abcmedia.no/pipe?url=https://guides-wp.startsiden.no/wp-content/uploads/2022/04/atlanterhavsveien-1-1024x573.jpeg&interlace=true&compression=9" },
+          { name: "Kristiansund", coords: [7.730052, 63.112789], info: "Explore Kristiansund, a vibrant coastal town with rich maritime history and breathtaking aerial views.", image: "https://res.cloudinary.com/simpleview/image/upload/v1568809677/clients/norway/kristiansund_aerial_northwest_norway_photo_terje_rakke_nordic_life_b3264f9d-ac12-4538-b072-d351df25b299.jpg" }
+        ]
+      },
+      "Day 5: World's Prettiest Fjord": {
+        description: "Day 5: World's Prettiest Fjord – Select a destination for more details.",
+        locations: [
+          { name: "My House", coords: [6.340769, 62.467673], info: "Our starting point: My House.", image: "" },
+          { name: "Gudbrandsjuvet", coords: [7.469646, 62.330689], info: "Gudbrandsjuvet is a dramatic gorge known for its steep cliffs and rushing waterfalls—an awe-inspiring display of nature's force.", image: "https://res.cloudinary.com/djew0njor/image/upload/v1628894951/chs3TdKiERWXiMUNwnoua.jpg" },
+          { name: "Trollstigen", coords: [7.662878, 62.453003], info: "Trollstigen is the famous mountain pass featuring hairpin bends and breathtaking views, offering a thrilling drive through rugged scenery.", image: "https://res.cloudinary.com/simpleview/image/upload/v1718951622/clients/norway/Trollstigen_Ivars_Utinsns_3b1e6267-5192-4535-8d26-2fcaa19dcda9.jpg" },
+          { name: "Geiranger", coords: [7.207566, 62.099706], info: "Geiranger is a picturesque fjord village celebrated for its majestic waterfalls and serene landscape, offering unforgettable views.", image: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f3/View_to_Geiranger_from_Flydalsjuvet%2C_2013_June.jpg/1200px-View_to_Geiranger_from_Flydalsjuvet%2C_2013_June.jpg" },
+          { name: "Dalsnibba", coords: [7.269816, 62.048660], info: "Dalsnibba offers one of Europe’s highest viewpoints, providing panoramic vistas over Geirangerfjord and the surrounding mountains.", image: "https://img0.oastatic.com/img2/56039571/max/variant.jpg" },
+          { name: "Fjord Cabin", coords: [6.088250, 62.066468], info: "Our final destination for the day—the Fjord Cabin, where we relax after an epic journey.", image: "" }
+        ]
+      },
+      "Day 6: Glaciers and Skylift": {
+        description: "Day 6: Glaciers and Skylift – Select a destination for more details.",
+        locations: [
+          { name: "Fjord Cabin", coords: [6.088250, 62.066468], info: "Starting point: Fjord Cabin.", image: "" },
+          { name: "Kvamfossen", coords: [6.817465, 61.704278], info: "Kvamfossen is a stunning waterfall with a powerful flow—a true marvel of nature.", image: "https://www.europeanwaterfalls.com/wp-content/uploads/Sulkjafossen.jpg" },
+          { name: "Briksdalsbreen", coords: [6.857247, 61.664319], info: "Briksdalsbreen is a magnificent glacier with a turquoise lake at its base.", image: "https://upload.wikimedia.org/wikipedia/commons/d/db/Briksdalsbreen_with_glacial_lake%2C_Sogn_og_Fjordane%2C_Norway%2C_2013_June.jpg" },
+          { name: "Loen Skylift", coords: [6.839421, 61.874774], info: "Experience breathtaking panoramic views from the Loen Skylift, one of the steepest in the world.", image: "https://images.squarespace-cdn.com/content/v1/66f18abc1281ef601f15d750/1727105843851-EG80RKBT3J5NQE04DBBU/Loen+Skylift_HQ-66_1500+Michael+Meusburger_crop.jpg" },
+          { name: "Lodalen", coords: [7.010994, 61.801156], info: "Lodalen offers serene landscapes and picturesque views, perfect for a peaceful stroll.", image: "https://www.alexandra.no/media/198128/scottsporlederfjordnorway-88_2500.jpg?w=800&h=560&mode=crop&anchor=middlecenter" },
+          { name: "Kjenndalsbreen", coords: [7.035272, 61.746928], info: "Kjenndalsbreen is a beautiful glacier with striking ice formations.", image: "https://lostinnorvana.nl/wp-content/uploads/2019/04/Kjenndalsbreen-5.jpg" }
+        ]
+      },
+      "Day 7: Cabin and Fishing Day": {
+        description: "Day 7: Cabin and Fishing Day – Select a destination for more details.",
+        locations: [
+          { name: "Fjord Cabin", coords: [6.088250, 62.066468], info: "Starting point: Fjord Cabin.", image: "" },
+          { name: "Fishing and Crabbing", coords: [6.088250, 62.066468], info: "Enjoy a day of local fishing and crab catching right by the cabin.", image: "https://webshopstorage.hkbits.no/skibsogfiskeriutstyr-pictures/0006049_krabbeteine-5kg.jpeg" },
+          { name: "Mountain Hike", coords: [6.094322, 62.052227], info: "Embark on a refreshing mountain hike to enjoy the serene views and natural beauty of the area.", image: "https://www.outdoorjournal.com/content/images/2025/02/HH1_2930.jpg" }
+        ]
+      },
+      "Day 8: One of Norway's Best Hikes": {
+        description: "Day 8: One of Norway's Best Hikes – Select a destination for more details.",
+        locations: [
+          // Starting point is Fjord Cabin
+          { name: "Fjord Cabin", coords: [6.088250, 62.066468], info: "Starting point: Fjord Cabin.", image: "" },
+          { name: "Norangsdalen", coords: [6.742859, 62.157236], info: "Norangsdalen is a stunning valley with narrow passages and cascading waterfalls.", image: "https://www.hjorundfjord.no/images/cache/1/31597/scale-down-800x600/norangdalen_smal.jpg?1522671098" },
+          { name: "Hjørundfjorden", coords: [6.570168, 62.211563], info: "Hjørundfjorden offers dramatic fjord scenery with towering mountains and serene waters.", image: "https://www.fjords.com/wp-content/uploads/2022/09/fjords_norway_hjorundfjord-1-scaled.jpg" },
+          { name: "Saksa Hike", coords: [6.552658, 62.229738], info: "The Saksa Hike challenges you with its steep ascent and rewards you with breathtaking panoramic views.", image: "https://www.fjords.com/wp-content/uploads/2021/07/saksa_panorama-scaled.jpg" }
+        ]
+      },
+      "Day 9: Geiranger Part 2": {
+        description: "Day 9: Geiranger Part 2 – Select a destination for more details.",
+        locations: [
+          { name: "Fjord Cabin", coords: [6.088250, 62.066468], info: "Starting point: Fjord Cabin.", image: "" },
+          { name: "Hellesylt", coords: [6.869373, 62.084958], info: "Visit Hellesylt to see its impressive waterfall.", image: "https://www.europeanwaterfalls.com/wp-content/uploads/Hellesyltfossen-1.jpg" },
+          { name: "Geiranger", coords: [7.207566, 62.099706], info: "Geiranger is a picturesque fjord village celebrated for its majestic waterfalls and serene landscapes.", image: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f3/View_to_Geiranger_from_Flydalsjuvet%2C_2013_June.jpg/1200px-View_to_Geiranger_from_Flydalsjuvet%2C_2013_June.jpg" },
+          { name: "Skageflå Viewpoint", coords: [7.120705, 62.110227], info: "Skageflå Viewpoint offers a stunning perspective of the fjord—accessible by ferry.", image: "https://images.squarespace-cdn.com/content/v1/5853f5f92994caf9f13b8543/1619006684157-AIWBB2NP1M5KQ32LZZ3Y/Geiranger-Skagefla-50.jpg?format=1500w" },
+          { name: "Storseterfossen Hike", coords: [7.231067, 62.105160], info: "Embark on a hike to Storseterfossen, a powerful waterfall you can walk behind.", image: "https://res.cloudinary.com/djew0njor/image/upload/v1624880353/to-sdSCBLoC3blFpOgjCG.jpg" }
+        ]
+      },
+      "Day 10: Bird Island and Coastal Life": {
+        description: "Day 10: Bird Island and Coastal Life – Select a destination for more details.",
+        locations: [
+          { name: "Fjord Cabin", coords: [6.088250, 62.066468], info: "Starting point: Fjord Cabin.", image: "" },
+          { name: "Runde", coords: [5.626030, 62.404015], info: "Runde is Norway’s famous bird island with dramatic coastal scenery.", image: "https://res.cloudinary.com/djew0njor/image/upload/v1651664546/%C3%85lesund%20og%20Geiranger/S%C3%B8re%20Sunnm%C3%B8re/Sunnm%C3%B8re_Runde_fuglefjellet_foto_oddgeir-visnes_18_h8qkfe.jpg" },
+          { name: "Puffins and Other Birds", coords: [5.595608, 62.404805], info: "Experience lively bird colonies featuring puffins and other seabirds in their natural habitat.", image: "https://cdn.prod.website-files.com/623dc294567371a6f6692f16/6242325886c25d7fa70367e5_Lundefugl.jpg" }
+        ]
+      }
+    };
+    window.tripData = tripData;
+    
+    /* --- FISHING GUIDE DATA --- */
+    const fishingGuideData = {
+      "Pollack": {
+        name: "Pollack (Pollachius pollachius)",
+        image: "https://upload.wikimedia.org/wikipedia/commons/c/c3/Pollachius_pollachius_NO.JPG",
+        howToCatch: "Pollack are often found around rocky areas and submerged structures. Effective methods include spinning with lures that mimic small fish or using baited hooks with sand eels or ragworms.",
+        taste: "Pollack has firm, white flesh with a mild flavor, making it versatile for various culinary preparations.",
+        funFact: "Pollack are known for their strong fighting ability when hooked, providing an exciting challenge for anglers."
+      },
+      "Tusk": {
+        name: "Tusk (Brosme brosme)",
+        image: "https://nordic-seaco.no/Userfiles/Upload/images/Modules/Products/30_cusk1280.png",
+        howToCatch: "Tusk inhabit deeper waters, typically between 100 to 400 meters. Bottom fishing with baited hooks using fish chunks or squid near rocky seabeds is effective.",
+        taste: "The meat is dense and flavorful, often compared to cod, and is excellent for baking or in stews.",
+        funFact: "Tusk have a single dorsal fin and are known for their distinctive chin barbel, which they use to detect food on the ocean floor."
+      },
+      "Common Ling": {
+        name: "Common Ling (Molva molva)",
+        image: "https://www.leroyseafood.com/globalassets/leroy-seafood/tasty-seafood--smakfull-sjomat/raw-materials/content-images/lange.jpg?width=1680&quality=90",
+        howToCatch: "Ling are found near rocky bottoms and shipwrecks at depths ranging from 15 to over 600 meters. Deep-sea fishing using heavy tackle and bait such as mackerel strips or squid is recommended.",
+        taste: "Ling has a firm texture with a slightly sweet flavor, making it ideal for grilling or frying.",
+        funFact: "Ling can grow quite large, with some individuals reaching lengths of up to 2 meters."
+      },
+      "Atlantic Cod": {
+        name: "Atlantic Cod (Gadus morhua)",
+        image: "https://media.snl.no/media/161820/standard_compressed_shutterstock_148764989.jpg",
+        howToCatch: "Cod are commonly found near the seabed at depths of 50 to 200 meters. Bottom fishing with baited hooks using clams, squid, or artificial lures is effective.",
+        taste: "Cod has a mild flavor with a flaky texture, making it popular for dishes like fish and chips.",
+        funFact: "The Barents Sea near Norway hosts one of the world's largest cod populations."
+      },
+      "Haddock": {
+        name: "Haddock (Melanogrammus aeglefinus)",
+        image: "https://www.hooked.no/wp-content/uploads/2011/09/art%20nummer%203%20hyse%201420%20gram%20og%2051cm.jpg",
+        howToCatch: "Haddock are typically found over sandy or muddy bottoms at depths of 40 to 200 meters. Bottom fishing with baited hooks using worms or clams works well.",
+        taste: "Haddock has a slightly sweeter flavor than cod and is often smoked or used in fish pies.",
+        funFact: "Haddock can be identified by the distinctive black lateral line running along their white bodies."
+      },
+      "Mackerel": {
+        name: "Mackerel (Scomber scombrus)",
+        image: "https://www.leroyseafood.com/globalassets/leroy-seafood/tasty-seafood--smakfull-sjomat/raw-materials/content-images/makrell.jpg?width=1680&quality=90",
+        howToCatch: "Mackerel are schooling fish found near the surface. Trolling with small lures or using mackerel feathers while drifting can be effective.",
+        taste: "Mackerel has rich, oily flesh with a strong flavor, ideal for grilling or smoking.",
+        funFact: "Mackerel are fast swimmers and migrate long distances during seasonal movements."
+      },
+      "Saithe": {
+        name: "Saithe (Pollachius virens)",
+        image: "https://media.snl.no/media/165046/article_topimage_shutterstock_563671126__1_.jpg",
+        howToCatch: "Saithe are found near piers and rocky shores. Spinning with jigs or baited hooks with herring or squid works well.",
+        taste: "Saithe has a firm texture with a slightly stronger flavor than cod, suitable for frying or casseroles.",
+        funFact: "Young saithe often form large schools, creating a spectacular sight near the surface."
+      },
+      "Halibut": {
+        name: "Halibut (Hippoglossus hippoglossus)",
+        image: "https://res.cloudinary.com/norgesgruppen/image/upload/c_fill,f_auto,h_439,q_auto,w_780/f2fvdfysqciw9zhhszgs.png",
+        howToCatch: "Halibut reside on the seabed at depths of 50 to 200 meters. Bottom fishing with large bait such as whole fish or substantial fish strips is effective.",
+        taste: "Halibut has a delicate, sweet flavor with firm, white flesh, making it highly prized.",
+        funFact: "Halibut are among the largest flatfish, with some individuals weighing several hundred kilograms."
+      },
+      "Edible Crab": {
+        name: "Edible Crab (Cancer pagurus)",
+        image: "https://media.snl.no/media/46415/standard_taskekrabbe.jpg",
+        howToCatch: "Use crab pots or traps baited with fish heads (ideally mackerel) or other smelly fish parts. Alternatively, hand-lining from piers with a simple rig can work.",
+        taste: "Crab meat is sweet, briny, and rich, with delicate white meat and more intense brown meat.",
+        funFact: "Crabs can regenerate lost claws, and females with eggs are protected by regulations."
+      },
+      "Wolf Fish": {
+        name: "Wolf Fish (Anarhichas lupus)",
+        image: "https://d26v6zbwbj9fsi.cloudfront.net/wp-content/uploads/2015/05/22190117/IMG_8910.jpg",
+        howToCatch: "Found in rocky seabeds at depths of 20–300 m, use bottom fishing with strong tackle and bait such as crabs, shrimp, or fish chunks.",
+        taste: "Wolf Fish has white, firm meat with a mild and sweet flavor, similar to lobster.",
+        funFact: "Nicknamed the 'sea wolf' for its fearsome teeth and powerful bite, it is generally shy."
+      }
+    };
+    window.fishingGuideData = fishingGuideData;
+    
+    /* --- MAP INITIALIZATION --- */
+    let currentDayLocations = [];
+    let currentRouteLayer = null;
+    
+    mapboxgl.accessToken = 'pk.eyJ1IjoiZmlsaXBwcm9kdWN0aW9ucyIsImEiOiJjbTkwcHBhcHowcHg5MnJzZGI3ejI1bngwIn0.MGw1gS9lzAhgWarUeuARTw';
+    const map = new mapboxgl.Map({
+      container: 'map',
+      style: 'mapbox://styles/mapbox/outdoors-v12',
+      center: [7.6869, 62.4722],
+      zoom: 6.2,
+      pitch: 60,
+      bearing: -20,
+      antialias: true
+    });
+    
+    map.on('load', () => {
+      map.addSource('mapbox-dem', {
+        type: 'raster-dem',
+        url: 'mapbox://mapbox.terrain-rgb',
+        tileSize: 512,
+        maxzoom: 14
+      });
+      map.setTerrain({ source: 'mapbox-dem', exaggeration: 2.5 });
+      map.addLayer({
+        id: 'sky',
+        type: 'sky',
+        paint: {
+          'sky-type': 'atmosphere',
+          'sky-atmosphere-sun': [0.0, 0.0],
+          'sky-atmosphere-sun-intensity': 15
+        }
+      });
+      populateDayButtons();
+    });
+    
+    /* --- DAY SELECTION & SCREEN SWITCHING --- */
+    function populateDayButtons() {
+      const dayButtonsDiv = document.getElementById('day-buttons');
+      dayButtonsDiv.innerHTML = "";
+      for (let day in window.tripData) {
+        const btn = document.createElement('button');
+        btn.className = 'day-button';
+        btn.textContent = day;
+        btn.onclick = () => loadDay(day);
+        dayButtonsDiv.appendChild(btn);
+      }
+    }
+    
+    // Load day details, fit map bounds, and switch to the Day Details screen
+    function loadDay(day) {
+      const dayData = window.tripData[day];
+      document.getElementById('day-description').textContent = dayData.description;
+      currentDayLocations = dayData.locations || [];
+      
+      // Populate the destination menu if locations exist
+      const destMenu = document.getElementById('destination-menu');
+      destMenu.innerHTML = "";
+      if (currentDayLocations.length > 0) {
+        currentDayLocations.forEach(loc => {
+          const item = document.createElement('div');
+          item.className = 'destination-item';
+          item.textContent = loc.name;
+          item.onclick = () => {
+            flyToLocation(loc);
+            showDestinationDetails(loc);
+          };
+          destMenu.appendChild(item);
+        });
+      }
+      
+      // Remove any existing route and markers
+      if (currentRouteLayer) {
+        if (map.getLayer('route')) map.removeLayer('route');
+        if (map.getSource('route')) map.removeSource('route');
+        currentRouteLayer = null;
+      }
+      if (map.getLayer('day-points-layer')) {
+        map.removeLayer('day-points-layer');
+      }
+      if (map.getSource('day-points')) {
+        map.removeSource('day-points');
+      }
+      
+      if (currentDayLocations.length > 0) {
+        drawRoute(currentDayLocations);
+        const features = currentDayLocations.map(loc => ({
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: loc.coords },
+          properties: {
+            name: loc.name,
+            info: loc.info,
+            image: loc.image
+          }
+        }));
+        const geojson = {
+          type: 'FeatureCollection',
+          features: features
+        };
+        map.addSource('day-points', { type: 'geojson', data: geojson });
+        map.addLayer({
+          id: 'day-points-layer',
+          type: 'circle',
+          source: 'day-points',
+          paint: {
+            'circle-radius': 8,
+            'circle-color': '#222222',
+            'circle-stroke-color': '#ffffff',
+            'circle-stroke-width': 2
+          }
+        });
+        map.on('click', 'day-points-layer', onPointClick);
+        map.on('mouseenter', 'day-points-layer', () => {
+          map.getCanvas().style.cursor = 'pointer';
+        });
+        map.on('mouseleave', 'day-points-layer', () => {
+          map.getCanvas().style.cursor = '';
+        });
+      }
+      
+      // Fit the map bounds to show all destinations
+      if (currentDayLocations.length > 0) {
+        const bounds = new mapboxgl.LngLatBounds();
+        currentDayLocations.forEach(loc => bounds.extend(loc.coords));
+        map.fitBounds(bounds, { padding: 50, maxZoom: 10 });
+      }
+      
+      // Switch screens: hide day-selection and show day-details
+      document.getElementById('day-selection').style.display = 'none';
+      document.getElementById('day-details').style.display = 'block';
+      document.getElementById('destination-details').style.display = 'none';
+    }
+    
+    // When a point is clicked on the map, show its details
+    function onPointClick(e) {
+      const features = map.queryRenderedFeatures(e.point, { layers: ['day-points-layer'] });
+      if (!features.length) return;
+      const feature = features[0];
+      const props = feature.properties;
+      const loc = {
+        name: props.name,
+        info: props.info,
+        image: props.image,
+        coords: feature.geometry.coordinates
+      };
+      flyToLocation(loc);
+      showDestinationDetails(loc);
+    }
+    
+    // Draw route using Mapbox Directions API
+    function drawRoute(locations) {
+      const coordsStr = locations.map(loc => loc.coords.join(',')).join(';');
+      const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordsStr}?geometries=geojson&access_token=${mapboxgl.accessToken}`;
+      fetch(url)
+        .then(response => response.json())
+        .then(data => {
+          if (data.routes && data.routes.length > 0) {
+            const route = data.routes[0].geometry;
+            map.addSource('route', {
+              type: 'geojson',
+              data: {
+                type: 'Feature',
+                properties: {},
+                geometry: route
+              }
+            });
+            map.addLayer({
+              id: 'route',
+              type: 'line',
+              source: 'route',
+              layout: {
+                'line-join': 'round',
+                'line-cap': 'round'
+              },
+              paint: {
+                'line-color': '#333333',
+                'line-width': 6
+              }
+            });
+            currentRouteLayer = 'route';
+          }
+        })
+        .catch(err => console.error(err));
+    }
+    
+    // Fly-to animation with a moderate pitch for a more overhead view
+    function flyToLocation(loc) {
+      map.flyTo({
+        center: loc.coords,
+        zoom: 12.5,
+        pitch: 30,
+        bearing: 0,
+        speed: 1.2,
+        curve: 1.8
+      });
+      // Disable map interactions once a point is clicked
+      map.dragPan.disable();
+      map.dragRotate.disable();
+      map.scrollZoom.disable();
+      map.doubleClickZoom.disable();
+      map.touchZoomRotate.disable();
+    }
+    
+    // Show destination details and switch to the Destination Details screen
+    function showDestinationDetails(loc) {
+      const infoDiv = document.getElementById('place-info');
+      infoDiv.innerHTML = `<h3>${loc.name}</h3><p>${loc.info}</p>` +
+                          (loc.image ? `<img src="${loc.image}" alt="${loc.name}">` : '');
+      document.getElementById('day-details').style.display = 'none';
+      document.getElementById('destination-details').style.display = 'block';
+    }
+    
+    /* --- FISHING GUIDE FUNCTIONS --- */
+    function populateFishingGuide() {
+      const speciesMenu = document.getElementById('fishing-species-menu');
+      speciesMenu.innerHTML = "";
+      for (let species in window.fishingGuideData) {
+        const item = document.createElement('div');
+        item.className = 'species-item';
+        item.textContent = window.fishingGuideData[species].name;
+        item.onclick = () => {
+          showFishingDetail(window.fishingGuideData[species]);
+        };
+        speciesMenu.appendChild(item);
+      }
+    }
+    
+    function showFishingDetail(speciesData) {
+      const fishingInfo = document.getElementById('fishing-info');
+      fishingInfo.innerHTML = `<h3>${speciesData.name}</h3>
+<p><strong>How to Catch:</strong> ${speciesData.howToCatch}</p>
+<p><strong>Taste:</strong> ${speciesData.taste}</p>
+<p><strong>Fun Fact:</strong> ${speciesData.funFact}</p>
+${speciesData.image ? `<img src="${speciesData.image}" alt="${speciesData.name}">` : ""}`;
+      document.getElementById('fishing-guide').style.display = 'none';
+      document.getElementById('fishing-detail').style.display = 'block';
+    }
+    
+    /* --- SCREEN SWITCHING FOR FISHING GUIDE --- */
+    document.getElementById('to-fishing-guide').addEventListener('click', () => {
+      // Switch screens: hide day-selection and show fishing-guide
+      document.getElementById('day-selection').style.display = 'none';
+      document.getElementById('day-details').style.display = 'none';
+      document.getElementById('destination-details').style.display = 'none';
+      document.getElementById('fishing-guide').style.display = 'block';
+      populateFishingGuide();
+    });
+    
+    document.getElementById('back-to-days-from-fishing').addEventListener('click', () => {
+      // Switch back to day-selection from fishing guide
+      document.getElementById('fishing-guide').style.display = 'none';
+      document.getElementById('day-selection').style.display = 'block';
+    });
+    
+    document.getElementById('back-to-fishing-guide').addEventListener('click', () => {
+      // Switch back to fishing-guide from fishing-detail
+      document.getElementById('fishing-detail').style.display = 'none';
+      document.getElementById('fishing-guide').style.display = 'block';
+    });
+    
+    /* --- BACK BUTTON EVENT LISTENERS FOR DAY SCREENS --- */
+    document.getElementById('back-to-days').addEventListener('click', () => {
+      // Re-enable map interactions
+      map.dragPan.enable();
+      map.dragRotate.enable();
+      map.scrollZoom.enable();
+      map.doubleClickZoom.enable();
+      map.touchZoomRotate.enable();
+      document.getElementById('day-details').style.display = 'none';
+      document.getElementById('destination-details').style.display = 'none';
+      document.getElementById('day-selection').style.display = 'block';
+      if (currentDayLocations.length > 0) {
+        const bounds = new mapboxgl.LngLatBounds();
+        currentDayLocations.forEach(loc => bounds.extend(loc.coords));
+        map.fitBounds(bounds, { padding: 50, maxZoom: 10 });
+      }
+    });
+    
+    document.getElementById('back-to-day-details').addEventListener('click', () => {
+      // Re-enable map interactions
+      map.dragPan.enable();
+      map.dragRotate.enable();
+      map.scrollZoom.enable();
+      map.doubleClickZoom.enable();
+      map.touchZoomRotate.enable();
+      document.getElementById('destination-details').style.display = 'none';
+      document.getElementById('day-details').style.display = 'block';
+      if (currentDayLocations.length > 0) {
+        const bounds = new mapboxgl.LngLatBounds();
+        currentDayLocations.forEach(loc => bounds.extend(loc.coords));
+        map.fitBounds(bounds, { padding: 50, maxZoom: 10 });
+      }
+    });
+  </script>
+</body>
+</html>
