@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Filip's Ålesund Trip</title>
+  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+  <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />
+  <style>
+    /* Basic flex layout for sidebar and map */
+    body {
+      margin: 0;
+      font-family: 'Georgia', serif;
+      display: flex;
+      height: 100vh;
+      background-color: #f4f2ee;
+    }
+    /* Default: sidebar 35%, map 65% */
+    #sidebar {
+      flex: 0 0 35%;
+      width: 35%;
+      background-color: #fff9f3;
+      border-right: 2px solid #ddd;
+      padding: 1em;
+      overflow-y: auto;
+      transition: all 0.3s ease;
+    }
+    #map {
+      flex: 1;
+      width: 65%;
+      height: 100%;
+      transition: all 0.3s ease;
+    }
+    /* Helper classes */
+    .half {
+      flex: 0 0 50% !important;
+      width: 50% !important;
+    }
+    .full {
+      flex: 0 0 100% !important;
+      width: 100% !important;
+    }
+    .hide {
+      display: none !important;
+    }
+    /* Sidebar screens */
+    #day-selection,
+    #day-details,
+    #destination-details,
+    #fishing-guide,
+    #fishing-detail {
+      display: none;
+    }
+    /* Initially, show day-selection */
+    #day-selection {
+      display: block;
+    }
+    /* Buttons */
+    .day-button, .extra-button, .back-button {
+      display: block;
+      margin-bottom: 0.5em;
+      padding: 0.6em;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+      border-radius: 6px;
+      transition: background 0.3s;
+    }
+    .day-button {
+      background: #dfe9d1;
+    }
+    .day-button:hover {
+      background: #cbe0b0;
+    }
+    .extra-button {
+      background: #f0d9a6;
+      margin-top: 1em;
+    }
+    .extra-button:hover {
+      background: #e8c39b;
+    }
+    .back-button {
+      background: #ccc;
+    }
+    /* Menus */
+    #destination-menu, #fishing-species-menu {
+      margin-top: 1em;
+      border-top: 1px solid #ddd;
+      padding-top: 1em;
+    }
+    .destination-item, .species-item {
+      padding: 0.5em;
+      margin: 0.3em 0;
+      background: #e0e0e0;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    .destination-item:hover, .species-item:hover {
+      background: #d0d0d0;
+    }
+    /* Text containers */
+    .description, .place-info {
+      margin-top: 1em;
+      font-size: 0.95em;
+      line-height: 1.4em;
+      white-space: pre-wrap;
+    }
+    .place-info {
+      font-size: 0.9em;
+      color: #333;
+    }
+    .place-info img {
+      max-width: 100%;
+      margin-top: 0.5em;
+      border-radius: 4px;
+    }
+    /* Fishing guide detail: split into two columns */
+    #fishing-info {
+      display: flex;
+      flex-direction: row;
+    }
+    #fishing-info-text {
+      flex: 1;
+      padding-right: 10px;
+    }
+    #fishing-info-image {
+      flex: 1;
+    }
+  </style>
+</head>
+<body>
+  <div id="sidebar">
+    <h2>Filip's Ålesund Trip</h2>
+    <!-- Day Selection Screen -->
+    <div id="day-selection">
+      <div id="day-buttons"></div>
+      <button class="extra-button" id="to-fishing-guide">Fishing Guide</button>
+    </div>
+    <!-- Day Details Screen -->
+    <div id="day-details">
+      <div class="description" id="day-description"></div>
+      <div id="destination-menu"></div>
+      <button class="back-button" id="back-to-days">Back to Day Selection</button>
+    </div>
+    <!-- Destination Details Screen -->
+    <div id="destination-details">
+      <div class="place-info" id="place-info"></div>
+      <button class="back-button" id="back-to-day-details">Back to Day Details</button>
+    </div>
+    <!-- Fishing Guide List Screen -->
+    <div id="fishing-guide">
+      <h3>Fishing Guide</h3>
+      <div id="fishing-species-menu"></div>
+      <button class="back-button" id="back-to-days-from-fishing">Back to Day Selection</button>
+    </div>
+    <!-- Fishing Guide Details Screen -->
+    <div id="fishing-detail">
+      <div class="place-info" id="fishing-info">
+        <div id="fishing-info-text"></div>
+        <div id="fishing-info-image"></div>
+      </div>
+      <button class="back-button" id="back-to-fishing-guide">Back to Fishing Guide</button>
+    </div>
+  </div>
+  <div id="map"></div>
+  
+  <script>
+    /* --- TRIP DATA FOR DAYS --- */
+    const tripData = {
+      "Day 1: Arrival to Cabin": {
+        description: "Day 1: Arrival to Cabin – Select a destination for more details.",
+        locations: [
+          { name: "Lillehammer", coords: [10.469362, 61.117376], info: "Departure from Lillehammer.", image: "" },
+          { name: "Bjorli", coords: [8.198157, 62.261717], info: "Bjorli is a small mountain village located at the edge of Reinheimen National Park, known for its alpine charm and dramatic highland scenery.<br><br><strong>Scenic stopover</strong> – This is more than just a break in the journey. Bjorli offers a moment to step into vast nature — with endless pine forests, steep mountain faces, and rivers flowing with glacial water.<br><br><strong>Winter & summer beauty</strong> – In winter, Bjorli is famous for its ski resort and long-lasting snow season. In summer, the landscape transforms into green alpine meadows, offering a peaceful contrast and great photo opportunities.<br><br><strong>Feel the shift</strong> – This is where the journey truly begins to feel like an adventure into raw Norwegian wilderness. Take a breath, stretch your legs, and soak in the silence of the surrounding mountains.", image: "https://bjorli.no/wp-content/uploads/2024/08/Bjorli_486c1f5673.jpg" },
+          { name: "Mountain Cabin", coords: [8.234854, 62.261469], info: "After the scenic journey, we’ll wind down in our mountain cabin surrounded by nature. This is your time to relax, breathe in the fresh alpine air, and enjoy the calm rhythm of Norwegian wilderness life.<br><br> <strong>Sauna time</strong> – Step into the traditional Norwegian sauna, let the warmth soothe your muscles, and watch the mist rise as you pour water over the hot stones. It’s the perfect way to unwind after a day on the road or in the mountains.<br><br> <strong>Darts & laughter</strong> – Challenge each other to a few friendly rounds of darts while music plays softly in the background. The goal isn’t to win, but to laugh, chill, and create memories together.", image: "https://boligpartner-cdn.imgix.net/uploads/boligpartner/06GJ5fA14HmYGZTZCpCQHOVqeWm5F6niHaZjJ6MG.jpg?w=955&h=490&fit=crop&crop=focalpoint&fp-debug=0&auto=format" }
+        ]
+      },
+      "Day 2: Europe's tallest Rock Face and First Fjords": {
+        description: "Day 2: Europe's tallest Rock Face and First Fjords – Select a destination for more details.",
+        locations: [
+          { name: "Mountain Cabin", coords: [8.234854, 62.261469], info: "Our starting point: Mountain Cabin.", image: "https://boligpartner-cdn.imgix.net/uploads/boligpartner/06GJ5fA14HmYGZTZCpCQHOVqeWm5F6niHaZjJ6MG.jpg?w=955&h=490&fit=crop&crop=focalpoint&fp-debug=0&auto=format" },
+          { name: "Slettafossen", coords: [8.077638, 62.324599], info: "A dramatic waterfall showcasing the power of the Rauma River.", image: "https://assets.simpleviewcms.com/simpleview/image/fetch/c_limit,h_1200,q_75,w_1200/https://res.cloudinary.com/djew0njor/image/upload/v1624879938/9nVMIV-e2XpbHXZ1MR-Q4.jpg" },
+          { name: "Kyllingbrua", coords: [8.059606, 62.338036], info: "A 1923 stone railway bridge on the famous Rauma Line, noted for its impressive stonework.", image: "https://assets.simpleviewcms.com/simpleview/image/fetch/c_limit,h_1200,q_75,w_1200/https://res.cloudinary.com/djew0njor/image/upload/v1652340460/Nordvest/Bedrifter/SJ%2520Norge/Raumabanen_SJ_Norge_Kylling_bru_-_photo_Leif_J_Olestad_mbpi5t.jpg" },
+          { name: "Trollveggen", coords: [7.760716, 62.488989], info: "Europe’s tallest vertical rock face, with a dramatic 50-meter overhang.", image: "https://assets.simpleviewcms.com/simpleview/image/fetch/c_fill,h_1080,w_1920/f_jpg/q_65/https://res.cloudinary.com/djew0njor/image/upload/v1624880053/xCv-8XoB-AdchkFxcXi9w.jpg?_a=BATCtdfi0" },
+          { name: "Åndalsnes", coords: [7.6907, 62.5663], info: "A quaint town nestled between fjords and mountains, ideal for a scenic stop.", image: "https://res.cloudinary.com/simpleview/image/upload/v1573655731/clients/norway/rampestreken_viewpoint_andalsnes_northwest_fjord_norway_photo_small_world_production_shutterstock_9fddfcfc-6867-48fc-a35f-6b64030488a4.jpg" },
+          { name: "Vestnes Bridge", coords: [7.116222, 62.611097], info: "A fjord-spanning bridge offering expansive views over the Romsdalsfjord.", image: "https://kommunikasjon.ntb.no/data/images/00176/3fd13775-16d8-4d2f-b897-5f574f252409-w_720.jpg" },
+          { name: "Sjøholt", coords: [6.815643, 62.479797], info: "A picturesque roadside viewpoint with calm fjord landscapes.", image: "https://media.snl.no/media/283042/standard_compressed_25525271367_d9c2237833_o.jpg" },
+          { name: "Moa Shopping Centre", coords: [6.352720, 62.466209], info: "One of Norway’s largest retail hubs, perfect for a break.", image: "https://assets.simpleviewcms.com/simpleview/image/fetch/c_limit,h_1200,q_75,w_1200/https://res.cloudinary.com/djew0njor/image/upload/v1638441430/TUtFR6BIg36cKNhZuGTCs.jpg" },
+          { name: "My House", coords: [6.340769, 62.467673], info: "A cozy residence marking the end of the scenic journey.", image: "" }
+        ]
+      },
+      "Day 3: Ålesund Exploration": {
+        description: "Day 3: Ålesund Exploration – Select a destination for more details.",
+        locations: [
+          { name: "My House", coords: [6.340713, 62.467608], info: "Starting point in Ålesund: My House.", image: "" },
+          { name: "Atlanterhavsparken", coords: [6.096277, 62.465659], info: "Atlanterhavsparken is one of Northern Europe’s largest saltwater aquariums, offering a close-up look at marine life from the Norwegian coastline and the Atlantic Ocean.<br><br>Here’s the activity schedule for the day:<br><br><table style='border-collapse: collapse; font-size: 0.95em;'><tr><td style='padding: 4px 10px;'><strong>13:00</strong></td><td style='padding: 4px 0;'>Fish feeding in the large ocean tank</td></tr><tr><td style='padding: 4px 10px;'><strong>13:30 – 14:30</strong></td><td style='padding: 4px 0;'>Activity room: Hold and interact with live sea fish</td></tr><tr><td style='padding: 4px 10px;'><strong>14:00</strong></td><td style='padding: 4px 0;'>Otter feeding</td></tr><tr><td style='padding: 4px 10px;'><strong>14:30</strong></td><td style='padding: 4px 0;'>Penguin feeding</td></tr><tr><td style='padding: 4px 10px;'><strong>15:00</strong></td><td style='padding: 4px 0;'>Seal feeding</td></tr></table><br>This is a great place to learn, relax, and enjoy time surrounded by sea life.", image: "https://cdn.prod.website-files.com/5caf09ccb26c804c82df2162/66d80e94be6ffd96fc8e8db6_6.jpg" },
+          { name: "Lamella Ice Cream", coords: [6.157577, 62.472932], info: "Enjoy delicious, homemade ice cream at <strong>Lamella</strong>, a charming local spot known for its high-quality, fresh Norwegian ingredients.<br><br>Lamella offers a variety of unique flavors, often inspired by the local season — from fresh berries in summer to creamy classics with a Nordic twist.<br><br>It’s the perfect place to take a break, sit down, and treat yourself to something sweet while enjoying the atmosphere of Ålesund’s city life.", image: "https://dirqzchonootr.cloudfront.net/media/14962/is-a-lesund-lamella.jpg" },
+          { name: "Fjellstua", coords: [6.164490, 62.474235], info: "<strong>Fjellstua</strong> is Ålesund’s most iconic viewpoint, perched high above the town on Mount Aksla. The journey begins in the city park, where you’ll climb <strong>418 stone steps</strong> that zig-zag upward through trees, stone walls, and peaceful terraces.<br><br>At the top, you’re rewarded with a breathtaking panoramic view over the entire city — with its colorful Art Nouveau buildings, surrounding fjords, and scattered islands stretching far into the Atlantic.<br><br>This spot is perfect for taking in Ålesund’s unique geography from above, snapping photos, or simply pausing for a moment of quiet reflection while feeling the sea breeze on your face.<br><br>There’s also a small café at the top if you want to relax with a drink while soaking in the view.<br><br><strong>Tip:</strong> If the weather is clear, try timing your visit for golden hour or sunset — the lighting makes the city glow and the mountains shimmer in the distance.", image: "https://res.cloudinary.com/djew0njor/image/upload/w_1200,h_630,c_fill/blog-articles/article-02/Aksla-A%CC%8Alesund-foto-Samuel-Taipale-VisitNorwaycom_xbdkxu_ishuyx.jpeg" }
+        ]
+      },
+      "Day 4: Coastal Cities and Atlantic Road": {
+        description: "Day 4: Coastal Cities and Atlantic Road – Select a destination for more details.",
+        locations: [
+          { name: "My House", coords: [6.340769, 62.467673], info: "Starting point: My House.", image: "" },
+          { name: "Molde", coords: [7.160035, 62.738515], info: "<strong>Molde</strong>, often called the <em>City of Roses</em>, is a coastal gem nestled between sea and mountains, offering a blend of elegance, nature, and tranquility.<br><br><strong>Breathtaking Panoramic Viewpoint</strong> – A short drive or hike brings you to <strong>Varden</strong>, a viewpoint situated 407 meters above sea level. From here, you'll experience a jaw-dropping <strong>360-degree view</strong> of the surrounding fjords and the legendary <strong>Molde Panorama</strong> — an unbroken sweep of <strong>222 snow-capped mountain peaks</strong> on the horizon. It's one of the most iconic views in Western Norway.<br><br><strong>Stroll Along the Seaside</strong> – After the viewpoint, take a relaxing walk through Molde’s charming town center. The city features a beautifully designed <strong>fjord promenade</strong> with benches, sculptures, and floral displays that give Molde its nickname. The path follows the gentle curve of the shoreline, offering peaceful views across the water and a soft sea breeze that carries the scent of roses in summer.<br><br>This is a stop where you can slow down, appreciate both vast landscapes and quiet details, and feel the blend of urban charm and raw Norwegian nature.", image: "https://simolde.no/wp-content/uploads/2024/06/Bilde-av-Molde-1.jpg" },
+          { name: "Atlantic Road", coords: [7.340927, 63.015175], info: "<strong>Atlantic Road (Atlanterhavsvegen)</strong> is often called <em>“The World’s Most Beautiful Drive”</em> — and for good reason. This spectacular route stretches across a chain of islands on Norway’s wild western coast, blending engineering with raw nature in a way that feels almost surreal.<br><br><strong>Drive Norway’s Most Famous Coastal Road</strong> – The journey follows a series of <strong>eight dramatic bridges</strong> that twist and curve across the open sea. With the ocean on both sides and mountains in the distance, every turn offers a new perspective.<br><br><strong>Storseisund Bridge</strong> – Stop at the most iconic bridge of them all. Its unique curve creates an <strong>optical illusion</strong> from certain angles, making it appear as if the road simply drops off into the ocean — a visual trick that has made it world-famous.<br><br><strong>Waves Crashing Against the Road</strong> – When the weather turns wild, the Atlantic Road becomes a front-row seat to nature’s power. Watch as waves thunder against the rocks and spray across the road — a dramatic and unforgettable scene.<br><br><strong>White Arctic Beach Stop</strong> – Along the way, take a moment to visit a nearby <strong>white-sanded Arctic beach</strong>. It’s a surreal contrast: soft sand, turquoise water, and towering cliffs — not the kind of beach most people imagine when they think of Norway.<br><br>This is not just a road. It’s a moving experience — a place where landscape and emotion collide in the most cinematic way.", image: "https://imaginary.abcmedia.no/pipe?url=https://guides-wp.startsiden.no/wp-content/uploads/2022/04/atlanterhavsveien-1-1024x573.jpeg&interlace=true&compression=9" },
+          { name: "Kristiansund", coords: [7.730052, 63.112789], info: "<strong>Kristiansund</strong> is a vibrant coastal city spread across four islands, tied together by bridges and boats. Known for its colorful wooden houses and deep fishing traditions, it offers a mix of maritime charm and lively harbor life.<br><br><strong>Explore the Colorful Fishing Town</strong> – Stroll along the waterfront and through narrow streets lined with bright wooden buildings. The harbor is a living museum of boats, nets, and history, offering glimpses into the life of generations who made their living from the sea.<br><br><strong>Smia Fiskerestaurant</strong> – For lunch or dinner, visit this well-loved local fish restaurant, situated right by the water. The atmosphere is cozy, and the food is celebrated for its freshness and tradition.<br><br>Try regional specialties like <strong>Klippfisk</strong> (salted, dried cod) or <strong>Bacalao</strong> — a rich, tomato-based cod stew inspired by Portuguese seafarers but rooted in Norwegian fishing heritage. It’s more than just a meal — it’s a taste of Kristiansund’s soul.<br><br>This stop is perfect for slowing down, enjoying local flavors, and connecting with Norway’s fishing culture in one of its most authentic forms.", image: "https://res.cloudinary.com/simpleview/image/upload/v1568809677/clients/norway/kristiansund_aerial_northwest_norway_photo_terje_rakke_nordic_life_b3264f9d-ac12-4538-b072-d351df25b299.jpg" }
+        ]
+      },
+      "Day 5: World's Prettiest Fjord": {
+        description: "Day 5: World's Prettiest Fjord – Select a destination for more details.",
+        locations: [
+          { name: "My House", coords: [6.340769, 62.467673], info: "Our starting point: My House.", image: "" },
+          { name: "Gudbrandsjuvet", coords: [7.469646, 62.330689], info: "<strong>Gudbrandsjuvet</strong> is a dramatic gorge carved by centuries of rushing glacial water, where narrow stone walls rise steeply around a roaring river below. It’s a hidden natural wonder tucked between forest and mountain.<br><br><strong>Rushing Waterfalls</strong> – As you approach the gorge, you'll hear the thunderous sound of cascading water echoing through the narrow passage — a constant reminder of nature’s raw power. The meltwater crashes through the tight canyon with incredible force, sculpting the rocks into surreal shapes.<br><br><strong>Scenic Footbridges</strong> – Carefully designed walkways and viewing platforms let you explore the gorge safely from above, offering a perfect vantage point to peer into the chasm. The bridges blend modern architecture with the wild landscape, letting you feel close to the elements without risking your footing.<br><br>This is more than just a photo stop — it’s a place where you can feel the energy of the landscape and reflect on the timeless forces that shaped Norway’s wilderness.", image: "https://res.cloudinary.com/djew0njor/image/upload/v1628894951/chs3TdKiERWXiMUNwnoua.jpg" },
+          { name: "Trollstigen", coords: [7.662878, 62.453003], info: "<strong>Trollstigen</strong> is Norway’s most legendary mountain pass — a serpentine road that clings to steep cliffs and winds dramatically through rugged landscapes.<br><br><strong>Hairpin Bends & Jaw-Dropping Views</strong> – The road features <strong>11 sharp hairpin turns</strong> as it climbs through sheer rock faces, waterfalls, and panoramic viewpoints. As you ascend, each bend reveals a new angle of the towering peaks and deep valleys below.<br><br><strong>Engineering Meets Nature</strong> – The route is a masterpiece of engineering, blending seamlessly into the wild environment. Viewing platforms near the top offer a safe way to admire the dizzying heights and the famous Stigfossen waterfall that pours beneath the road.<br><br>Driving Trollstigen is not just a journey — it’s an exhilarating experience that merges adrenaline with awe.", image: "https://res.cloudinary.com/simpleview/image/upload/v1718951622/clients/norway/Trollstigen_Ivars_Utinsns_3b1e6267-5192-4535-8d26-2fcaa19dcda9.jpg" },
+          { name: "Geiranger", coords: [7.207566, 62.099706], info: "<strong>Geiranger</strong> is a UNESCO World Heritage site, celebrated for its dramatic fjord landscape, waterfalls, and fairytale-like setting.<br><br><strong>Breathtaking Ferry Ride</strong> – Experience one of Norway’s most iconic fjord cruises, gliding between towering cliffs, lush green slopes, and waterfalls like the Seven Sisters cascading straight into the fjord.<br><br><strong>The Famous Swing</strong> – Stop for a photo on a mountaintop swing with the Geirangerfjord as your backdrop — an unforgettable moment for both thrill and beauty.<br><br><strong>Ørnesvingen Viewpoint</strong> – Known as the Eagle’s Bend, this legendary viewpoint offers one of the most stunning panoramas in all of Norway. Look out over the winding fjord, the ferry below, and the deep valley leading to Geiranger.<br><br><strong>Descend into Geiranger</strong> – The drive into the village is a thrill in itself, with hairpin turns revealing layer upon layer of scenery as you descend into the heart of the fjord.<br><br><strong>Explore Geiranger</strong> – Once below, stroll through this picturesque village filled with cozy cafés, souvenir shops, and views in every direction.<br><br><strong>Waterfall Path</strong> – Take the famous footpath that follows the waterfall as it cuts through the town — a close, immersive way to experience the fjord’s raw power up close.Geiranger is a picturesque fjord village celebrated for its majestic waterfalls and serene landscape, offering unforgettable views.", image: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f3/View_to_Geiranger_from_Flydalsjuvet%2C_2013_June.jpg/1200px-View_to_Geiranger_from_Flydalsjuvet%2C_2013_June.jpg" },
+          { name: "Dalsnibba", coords: [7.269816, 62.048660], info: "<strong>Dalsnibba</strong> offers what many call the <em>ultimate fjord panorama</em>. At 1,476 meters above sea level, it's one of the highest viewpoints in Europe accessible by car.<br><br><strong>Scenic Mountain Drive</strong> – The journey up is just as breathtaking as the summit. Snow-patched peaks, winding roads, and vast alpine plateaus make the drive unforgettable.<br><br><strong>Dalsnibba Summit</strong> – From the top, enjoy a sweeping view over the entire Geirangerfjord region, with glaciers, valleys, and sky all meeting in one epic panorama.<br><br><strong>Crystal-Clear Mountain Lakes</strong> – Along the way, spot still alpine lakes reflecting the blue sky and the jagged peaks. These untouched waters add a surreal calm to the high-altitude adventure.alsnibba offers one of Europe’s highest viewpoints, providing panoramic vistas over Geirangerfjord and the surrounding mountains.", image: "https://img0.oastatic.com/img2/56039571/max/variant.jpg" },
+          { name: "Fjord Cabin", coords: [6.088250, 62.066468], info: "Our final destination for the day—the Fjord Cabin, where we relax after an epic journey.", image: "" }
+        ]
+      },
+      "Day 6: Glaciers and Skylift": {
+        description: "Day 6: Glaciers and Skylift – Select a destination for more details.",
+        locations: [
+          { name: "Fjord Cabin", coords: [6.088250, 62.066468], info: "<strong>Fjord Cabin</strong> – Arrive at a cozy traditional Norwegian cabin nestled beside the fjord. The surrounding mountains, still waters, and forest create the perfect base for rest and exploration.<br><br><strong>Beach Visit</strong> – Take a walk along the stony shoreline, skip rocks across the glassy water, or go for a refreshing fjord bath — a bracing and unforgettable dip surrounded by epic scenery.<br><br><strong>Grill & Feast</strong> – Fire up the grill and enjoy fresh-caught fish alongside Norwegian favorites like <em>pølse i brød</em>, salmon, cod, <em>elgkaker</em> (moose patties), and cured <em>fenalår</em>. If the weather turns cold, cook inside a traditional <strong>grillhytte</strong> for a cozy, fire-lit meal.Starting point: Fjord Cabin.", image: "" },
+          { name: "Kvamfossen", coords: [6.817465, 61.704278], info: "Kvamfossen is a stunning waterfall with a powerful flow—a true marvel of nature.", image: "https://www.europeanwaterfalls.com/wp-content/uploads/Sulkjafossen.jpg" },
+          { name: "Briksdalsbreen", coords: [6.857247, 61.664319], info: "<strong>Briksdalsbreen</strong> is one of Norway’s most accessible glacier arms, located in the Jostedalsbreen National Park.<br><br><strong>45-Minute Hike</strong> – The walk to the glacier leads you through a spectacular valley filled with towering cliffs, rushing rivers, and moss-covered boulders. It’s a beautiful, well-maintained trail with several scenic stops along the way.<br><br><strong>Turquoise Glacier Lake</strong> – At the end of the hike, you reach a vividly colored lake fed directly by the melting glacier. The towering ice wall, waterfall, and dramatic rock surroundings make it a truly breathtaking sight.<br><br>This is a place where the ancient ice meets living landscape, and where every step brings you closer to nature’s raw beauty.Briksdalsbreen is a magnificent glacier with a turquoise lake at its base.", image: "https://upload.wikimedia.org/wikipedia/commons/d/db/Briksdalsbreen_with_glacial_lake%2C_Sogn_og_Fjordane%2C_Norway%2C_2013_June.jpg" },
+          { name: "Loen Skylift", coords: [6.839421, 61.874774], info: "<strong>Loen Skylift</strong> is one of the steepest cable cars in the world, taking you from fjord level to 1,011 meters in under five minutes.<br><br><strong>A Panoramic Ascent</strong> – As you rise nearly vertically, you'll watch the fjord drop away beneath you and a vast mountain world open up above.<br><br><strong>Hoven Restaurant</strong> – At the summit, enjoy a meal with a view that feels like it belongs on a postcard. The restaurant offers Norwegian specialties like reindeer burgers with brown cheese — a taste of tradition with a view to match.<br><br><strong>Optional Mountain Hike</strong> – If there’s energy left, explore the well-marked high-altitude trails above Loen. The fresh air, sweeping views, and alpine stillness make it feel like walking through a dream.xperience breathtaking panoramic views from the Loen Skylift, one of the steepest in the world.", image: "https://images.squarespace-cdn.com/content/v1/66f18abc1281ef601f15d750/1727105843851-EG80RKBT3J5NQE04DBBU/Loen+Skylift_HQ-66_1500+Michael+Meusburger_crop.jpg" },
+          { name: "Lodalen", coords: [7.010994, 61.801156], info: "<strong>Explore Lodalen</strong> – Often described as one of Norway’s most peaceful and photogenic valleys, Lodalen is a hidden gem where nature feels untouched and humbling.<br><br><strong>Mirror-Like Waters</strong> – The emerald-green lake reflects towering cliffs and waterfalls, creating perfect symmetry on calm days. You’ll feel like you're stepping into a painting.<br><br><strong>Tragic Beauty</strong> – The valley carries a dramatic history, with rockslides in the early 1900s creating tsunamis that swept through villages. Memorials along the road remind visitors of nature’s power.<br><br><strong>Pastoral Scenery</strong> – Small farms and grazing animals dot the valley floor, framed by snow-capped peaks and endless greenery. It’s a place of silence, serenity, and raw, living beauty.<br><br>Perfect for quiet reflection, slow walks, and photos that will look too beautiful to be real.Lodalen offers serene landscapes and picturesque views, perfect for a peaceful stroll.", image: "https://www.alexandra.no/media/198128/scottsporlederfjordnorway-88_2500.jpg?w=800&h=560&mode=crop&anchor=middlecenter" },
+          { name: "Kjenndalsbreen", coords: [7.035272, 61.746928], info: "<strong>Kjenndalsbreen</strong> is another arm of the Jostedalsbreen Glacier, and one of the most intimate glacier experiences you can have in Norway.<br><br><strong>Short Scenic Walk</strong> – The trail is gentle and short, but the scenery is dramatic: vertical rock walls, misty cascades, and turquoise streams run alongside you as you approach the glacier.<br><br><strong>Glacier Close-Up</strong> – Unlike many other glaciers, Kjenndalsbreen feels close and personal. You’ll stand just across a glacial lake from the ice itself, watching meltwater fall in thin ribbons from the icy cliffs above.<br><br>This is a quiet, less crowded spot where you can hear the water move, feel the cool air from the glacier, and witness the slow, powerful motion of nature in real time.Kjenndalsbreen is a beautiful glacier with striking ice formations.", image: "https://lostinnorvana.nl/wp-content/uploads/2019/04/Kjenndalsbreen-5.jpg" }
+        ]
+      },
+      "Day 7: Cabin and Fishing Day": {
+        description: "Day 7: Cabin and Fishing Day – Select a destination for more details.",
+        locations: [
+          { name: "Fjord Cabin", coords: [6.088250, 62.066468], info: "<strong>Fjord Cabin</strong> – Arrive at a cozy traditional Norwegian cabin nestled beside the fjord. The surrounding mountains, still waters, and forest create the perfect base for rest and exploration.<br><br><strong>Beach Visit</strong> – Take a walk along the stony shoreline, skip rocks across the glassy water, or go for a refreshing fjord bath — a bracing and unforgettable dip surrounded by epic scenery.<br><br><strong>Grill & Feast</strong> – Fire up the grill and enjoy fresh-caught fish alongside Norwegian favorites like <em>pølse i brød</em>, salmon, cod, <em>elgkaker</em> (moose patties), and cured <em>fenalår</em>. If the weather turns cold, cook inside a traditional <strong>grillhytte</strong> for a cozy, fire-lit meal.Starting point: Fjord Cabin.", image: "" },
+          { name: "Fishing and Crabbing", coords: [6.088250, 62.066468], info: "<strong>Fishing & Crabbing</strong> – Experience the Norwegian tradition of fishing right from the cabin's edge. Cast a line for cod or mackerel, and set out crab nets overnight for a morning harvest.<br><br>Watch and learn how freshly caught seafood is cleaned, cooked, and prepared the traditional way — then enjoy a private tasting with unbeatable freshness and fjord views.Enjoy a day of local fishing and crab catching right by the cabin.", image: "https://webshopstorage.hkbits.no/skibsogfiskeriutstyr-pictures/0006049_krabbeteine-5kg.jpeg" },
+          { name: "Mountain Hike", coords: [6.094322, 62.052227], info: "<strong>Hidden Lake Hike</strong> – A short and gentle trail leads through mossy woods to a peaceful mountain lake, with a cool stream running along the way. A quick escape into serenity.Embark on a refreshing mountain hike to enjoy the serene views and natural beauty of the area.", image: "https://www.outdoorjournal.com/content/images/2025/02/HH1_2930.jpg" }
+        ]
+      },
+      "Day 8: One of Norway's Best Hikes": {
+        description: "Day 8: One of Norway's Best Hikes – Select a destination for more details.",
+        locations: [
+          // Starting point for Day 8 is Fjord Cabin
+          { name: "Fjord Cabin", coords: [6.088250, 62.066468], info: "Starting point: Fjord Cabin.", image: "" },
+          { name: "Norangsdalen", coords: [6.742859, 62.157236], info: "<strong>Norangsdalen</strong> – Known as one of Norway’s most beautiful and narrow valleys, this stunning landscape is framed by towering cliffs, cascading waterfalls, and a winding road that feels like it belongs in a fantasy filmorangsdalen is a stunning valley with narrow passages and cascading waterfalls.", image: "https://www.hjorundfjord.no/images/cache/1/31597/scale-down-800x600/norangdalen_smal.jpg?1522671098" },
+          { name: "Hjørundfjorden", coords: [6.570168, 62.211563], info: "<strong>Hjørundfjorden</strong> – A hidden gem among Norway’s fjords, Hjørundfjorden is flanked by jagged peaks and untouched nature. With far fewer tourists, it’s one of the best places to experience Norway’s wilderness in its rawest form.Hjørundfjorden offers dramatic fjord scenery with towering mountains and serene waters.", image: "https://www.fjords.com/wp-content/uploads/2022/09/fjords_norway_hjorundfjord-1-scaled.jpg" },
+          { name: "Saksa Hike", coords: [6.552658, 62.229738], info: "<strong>Saksa</strong> is one of Norway’s most dramatic hikes, combining steep ascents with unforgettable views.<br><br><strong>Challenging Ascent</strong> – The trail is steep but well-marked, requiring focus and endurance as it winds upward through alpine terrain.<br><br><strong>Panoramic Fjord Views</strong> – At the top, you're treated to a jaw-dropping perspective over Hjørundfjorden, Norangsdalen, and surrounding mountain peaks.<br><br><strong>Summit Ridge</strong> – The final section is a dramatic ridge with steep drops on either side. Reaching this point is thrilling and unforgettable.<br><br><strong>A True Achievement</strong> – Completing this hike brings a powerful sense of accomplishment and is likely to be one of the highlights of the entire trip.The Saksa Hike challenges you with its steep ascent and rewards you with breathtaking panoramic views.", image: "https://www.fjords.com/wp-content/uploads/2021/07/saksa_panorama-scaled.jpg" }
+        ]
+      },
+      "Day 9: Geiranger Part 2": {
+        description: "Day 9: Geiranger Part 2 – Select a destination for more details.",
+        locations: [
+          { name: "Fjord Cabin", coords: [6.088250, 62.066468], info: "Starting point: Fjord Cabin.", image: "" },
+          { name: "Hellesylt", coords: [6.869373, 62.084958], info: "<strong>Hellesylt</strong> – Visit the thundering waterfall that runs through the heart of the village — a dramatic welcome to this scenic fjord town.<br><br>From here, take the ferry through the famous Geirangerfjord — a spectacular journey past towering cliffs and waterfalls.isit Hellesylt to see its impressive waterfall.", image: "https://www.europeanwaterfalls.com/wp-content/uploads/Hellesyltfossen-1.jpg" },
+          { name: "Geiranger", coords: [7.207566, 62.099706], info: "<strong>Geiranger</strong> is a UNESCO World Heritage site, celebrated for its dramatic fjord landscape, waterfalls, and fairytale-like setting.<br><br><strong>Breathtaking Ferry Ride</strong> – Experience one of Norway’s most iconic fjord cruises, gliding between towering cliffs, lush green slopes, and waterfalls like the Seven Sisters cascading straight into the fjord.<br><br><strong>The Famous Swing</strong> – Stop for a photo on a mountaintop swing with the Geirangerfjord as your backdrop — an unforgettable moment for both thrill and beauty.<br><br><strong>Ørnesvingen Viewpoint</strong> – Known as the Eagle’s Bend, this legendary viewpoint offers one of the most stunning panoramas in all of Norway. Look out over the winding fjord, the ferry below, and the deep valley leading to Geiranger.<br><br><strong>Descend into Geiranger</strong> – The drive into the village is a thrill in itself, with hairpin turns revealing layer upon layer of scenery as you descend into the heart of the fjord.<br><br><strong>Explore Geiranger</strong> – Once below, stroll through this picturesque village filled with cozy cafés, souvenir shops, and views in every direction.<br><br><strong>Waterfall Path</strong> – Take the famous footpath that follows the waterfall as it cuts through the town — a close, immersive way to experience the fjord’s raw power up close.Geiranger is a picturesque fjord village celebrated for its majestic waterfalls and serene landscapes.", image: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f3/View_to_Geiranger_from_Flydalsjuvet%2C_2013_June.jpg/1200px-View_to_Geiranger_from_Flydalsjuvet%2C_2013_June.jpg" },
+          { name: "Skageflå Viewpoint", coords: [7.120705, 62.110227], info: "<strong>Skageflå Farm & Viewpoint</strong> – Reach this abandoned mountain farm by ferry and foot, and take in one of the best views over Geirangerfjord. The hike up is steep but rewarding, and the setting offers both history and scenery in one unforgettable package.kageflå Viewpoint offers a stunning perspective of the fjord—accessible by ferry.", image: "https://images.squarespace-cdn.com/content/v1/5853f5f92994caf9f13b8543/1619006684157-AIWBB2NP1M5KQ32LZZ3Y/Geiranger-Skagefla-50.jpg?format=1500w" },
+          { name: "Storseterfossen Hike", coords: [7.231067, 62.105160], info: "<strong>Storseterfossen Hike</strong> – Optional depending on energy, this 1.5-hour round-trip leads to a powerful waterfall you can actually walk behind.<br><br><strong>Vesterås Gård</strong> – On the way, pass by a traditional Norwegian mountain farm, where you may see goats, sheep, and even llamas up close.mbark on a hike to Storseterfossen, a powerful waterfall you can walk behind.", image: "https://res.cloudinary.com/djew0njor/image/upload/v1624880353/to-sdSCBLoC3blFpOgjCG.jpg" }
+        ]
+      },
+      "Day 10: Bird Island and Coastal Life": {
+        description: "Day 10: Bird Island and Coastal Life – Select a destination for more details.",
+        locations: [
+          { name: "Fjord Cabin", coords: [6.088250, 62.066468], info: "Starting point: Fjord Cabin.", image: "" },
+          { name: "Runde", coords: [5.626030, 62.404015], info: "<strong>Runde</strong> – Known as Norway’s bird island, Runde is a paradise for nature lovers and birdwatchers.<br><br><strong>Scenic Hike with Ocean Views</strong> – Follow trails up to the dramatic cliffs where the land meets the open Atlantic. From here, the views are wide, wild, and unforgettable.<br><br><strong>Wildlife Spotting</strong> – The island is home to thousands of seabirds, including puffins, eagles, and gulls. Bring binoculars and a camera — this is a rare and lively ecosystem you won’t want to miss.Runde is Norway’s famous bird island with dramatic coastal scenery.", image: "https://res.cloudinary.com/djew0njor/image/upload/v1651664546/%C3%85lesund%20og%20Geiranger/S%C3%B8re%20Sunnm%C3%B8re/Sunnm%C3%B8re_Runde_fuglefjellet_foto_oddgeir-visnes_18_h8qkfe.jpg" },
+          { name: "Puffins and Other Birds", coords: [5.595608, 62.404805], info: "Experience lively bird colonies featuring puffins and other seabirds in their natural habitat.", image: "https://cdn.prod.website-files.com/623dc294567371a6f6692f16/6242325886c25d7fa70367e5_Lundefugl.jpg" }
+        ]
+      }
+    };
+    window.tripData = tripData;
+    
+    /* --- FISHING GUIDE DATA --- */
+    const fishingGuideData = {
+      "Pollack": {
+        name: "Pollack (Pollachius pollachius)",
+        image: "https://upload.wikimedia.org/wikipedia/commons/c/c3/Pollachius_pollachius_NO.JPG",
+        howToCatch: "Pollack are often found around rocky areas and submerged structures. Effective methods include spinning with lures that mimic small fish or using baited hooks with sand eels or ragworms.",
+        taste: "Pollack has firm, white flesh with a mild flavor, making it versatile for various culinary preparations.",
+        funFact: "Pollack are known for their strong fighting ability when hooked, providing an exciting challenge for anglers."
+      },
+      "Tusk": {
+        name: "Tusk (Brosme brosme)",
+        image: "https://nordic-seaco.no/Userfiles/Upload/images/Modules/Products/30_cusk1280.png",
+        howToCatch: "Tusk inhabit deeper waters, typically between 100 to 400 meters. Bottom fishing with baited hooks using fish chunks or squid near rocky seabeds is effective.",
+        taste: "The meat is dense and flavorful, often compared to cod, and is excellent for baking or in stews.",
+        funFact: "Tusk have a single dorsal fin and are known for their distinctive chin barbel, which they use to detect food on the ocean floor."
+      },
+      "Common Ling": {
+        name: "Common Ling (Molva molva)",
+        image: "https://www.leroyseafood.com/globalassets/leroy-seafood/tasty-seafood--smakfull-sjomat/raw-materials/content-images/lange.jpg?width=1680&quality=90",
+        howToCatch: "Ling are found near rocky bottoms and shipwrecks at depths ranging from 15 to over 600 meters. Deep-sea fishing using heavy tackle and bait such as mackerel strips or squid is recommended.",
+        taste: "Ling has a firm texture with a slightly sweet flavor, making it ideal for grilling or frying.",
+        funFact: "Ling can grow quite large, with some individuals reaching lengths of up to 2 meters."
+      },
+      "Atlantic Cod": {
+        name: "Atlantic Cod (Gadus morhua)",
+        image: "https://media.snl.no/media/161820/standard_compressed_shutterstock_148764989.jpg",
+        howToCatch: "Cod are commonly found near the seabed at depths of 50 to 200 meters. Bottom fishing with baited hooks using clams, squid, or artificial lures is effective.",
+        taste: "Cod has a mild flavor with a flaky texture, making it popular for dishes like fish and chips.",
+        funFact: "The Barents Sea near Norway hosts one of the world's largest cod populations."
+      },
+      "Haddock": {
+        name: "Haddock (Melanogrammus aeglefinus)",
+        image: "https://www.hooked.no/wp-content/uploads/2011/09/art%20nummer%203%20hyse%201420%20gram%20og%2051cm.jpg",
+        howToCatch: "Haddock are typically found over sandy or muddy bottoms at depths of 40 to 200 meters. Bottom fishing with baited hooks using worms or clams works well.",
+        taste: "Haddock has a slightly sweeter flavor than cod and is often smoked or used in fish pies.",
+        funFact: "Haddock can be identified by the distinctive black lateral line running along their white bodies."
+      },
+      "Mackerel": {
+        name: "Mackerel (Scomber scombrus)",
+        image: "https://www.leroyseafood.com/globalassets/leroy-seafood/tasty-seafood--smakfull-sjomat/raw-materials/content-images/makrell.jpg?width=1680&quality=90",
+        howToCatch: "Mackerel are schooling fish found near the surface. Trolling with small lures or using mackerel feathers while drifting can be effective.",
+        taste: "Mackerel has rich, oily flesh with a strong flavor, ideal for grilling or smoking.",
+        funFact: "Mackerel are fast swimmers and migrate long distances during seasonal movements."
+      },
+      "Saithe": {
+        name: "Saithe (Pollachius virens)",
+        image: "https://media.snl.no/media/165046/article_topimage_shutterstock_563671126__1_.jpg",
+        howToCatch: "Saithe are found near piers and rocky shores. Spinning with jigs or using baited hooks with herring or squid works well.",
+        taste: "Saithe has a firm texture with a slightly stronger flavor than cod, suitable for frying or casseroles.",
+        funFact: "Young saithe often form large schools, creating a spectacular sight near the surface."
+      },
+      "Halibut": {
+        name: "Halibut (Hippoglossus hippoglossus)",
+        image: "https://res.cloudinary.com/norgesgruppen/image/upload/c_fill,f_auto,h_439,q_auto,w_780/f2fvdfysqciw9zhhszgs.png",
+        howToCatch: "Halibut reside on the seabed at depths of 50 to 200 meters. Bottom fishing with large bait such as whole fish or substantial fish strips is effective.",
+        taste: "Halibut has a delicate, sweet flavor with firm, white flesh, making it highly prized.",
+        funFact: "Halibut are among the largest flatfish, with some individuals weighing several hundred kilograms."
+      },
+      "Edible Crab": {
+    name: "Edible Crab (Cancer pagurus)",
+    image: "https://media.snl.no/media/46415/standard_taskekrabbe.jpg",
+    howToCatch: "The edible crab, or 'taskekrabbe' in Norwegian, is best caught between August and October, when they are most active and meaty.\n\nCrabs are nocturnal foragers, so the most effective time to catch them is in the evening or during the night, especially around high tide or during a rising tide when they leave their shelters to hunt.\n\nThe most successful and humane method is to use crab pots or traps. These are baited with strong-smelling fish parts, ideally mackerel heads, fish guts, or old seafood scraps — the smellier, the better. Drop the trap into shallow coastal waters (2 to 5 meters deep), ideally near rocks or seaweed beds where crabs tend to hide. Secure the rope to a rock or dock and leave it overnight. In the morning, you’re likely to find several crabs inside. Make sure the trap is weighted so it doesn’t drift, and avoid placing it in areas with strong current.\n\nAn alternative method is hand-lining: tie a bait (such as a fish head or raw chicken) to a string, lower it gently near the seafloor from a pier or rock, and wait until you feel a crab tugging. Slowly and steadily pull it up, and use a hand net to catch it before it drops off.\n\nA more basic method, useful at low tide, is flipping over shoreline rocks and gently picking up crabs hiding underneath — always return the rocks to their original position to preserve their habitat.\n\nNever take more than you plan to eat, and always release undersized crabs (below 13 cm shell width) and any females carrying eggs.\n\nCrabs should be stored in a cool bucket of seawater and cooked the same day for best taste. When handling live crabs, pick them up from behind to avoid the claws.",
+    taste: "Crab meat is known for its contrasting textures and flavors. The white meat from the legs and claws is sweet, mild, and delicate, while the brown meat from the body is rich, briny, and full of umami. Together, they offer a diverse culinary experience, perfect for both simple and gourmet dishes.",
+    funFact: "Edible crabs can live over 20 years and grow very large. They can regenerate lost limbs over time. Female crabs carrying visible eggs must always be released by law to protect the population. Crabbing has been a tradition in coastal Norway since Viking times, and crabs remain a staple in local seafood feasts today."
+}
+,
+      "Wolf Fish": {
+        name: "Wolf Fish (Anarhichas lupus)",
+        image: "https://d26v6zbwbj9fsi.cloudfront.net/wp-content/uploads/2015/05/22190117/IMG_8910.jpg",
+        howToCatch: "Found in rocky seabeds at depths of 20–300 m, use bottom fishing with strong tackle and bait such as crabs, shrimp, or fish chunks.",
+        taste: "Wolf Fish has white, firm meat with a mild and sweet flavor, similar to lobster.",
+        funFact: "Nicknamed the 'sea wolf' for its fearsome teeth and powerful bite, it is generally shy."
+      }
+    };
+    window.fishingGuideData = fishingGuideData;
+    
+    /* --- MAP INITIALIZATION --- */
+    let currentDayLocations = [];
+    let currentRouteLayer = null;
+    
+    mapboxgl.accessToken = 'pk.eyJ1IjoiZmlsaXBwcm9kdWN0aW9ucyIsImEiOiJjbTkwcHBhcHowcHg5MnJzZGI3ejI1bngwIn0.MGw1gS9lzAhgWarUeuARTw';
+    const map = new mapboxgl.Map({
+      container: 'map',
+      style: 'mapbox://styles/mapbox/outdoors-v12',
+      center: [7.6869, 62.4722],
+      zoom: 6.2,
+      pitch: 60,
+      bearing: -20,
+      antialias: true
+    });
+    
+    map.on('load', () => {
+      map.addSource('mapbox-dem', {
+        type: 'raster-dem',
+        url: 'mapbox://mapbox.terrain-rgb',
+        tileSize: 512,
+        maxzoom: 14
+      });
+      map.setTerrain({ source: 'mapbox-dem', exaggeration: 2.5 });
+      map.addLayer({
+        id: 'sky',
+        type: 'sky',
+        paint: {
+          'sky-type': 'atmosphere',
+          'sky-atmosphere-sun': [0.0, 0.0],
+          'sky-atmosphere-sun-intensity': 15
+        }
+      });
+      populateDayButtons();
+    });
+    
+    /* --- DAY SELECTION & SCREEN SWITCHING --- */
+    function populateDayButtons() {
+      const dayButtonsDiv = document.getElementById('day-buttons');
+      dayButtonsDiv.innerHTML = "";
+      for (let day in window.tripData) {
+        const btn = document.createElement('button');
+        btn.className = 'day-button';
+        btn.textContent = day;
+        btn.onclick = () => loadDay(day);
+        dayButtonsDiv.appendChild(btn);
+      }
+    }
+    
+    // Load day details, fit map bounds, and switch to the Day Details screen
+    function loadDay(day) {
+      const dayData = window.tripData[day];
+      document.getElementById('day-description').textContent = dayData.description;
+      currentDayLocations = dayData.locations || [];
+      
+      // Populate the destination menu if locations exist
+      const destMenu = document.getElementById('destination-menu');
+      destMenu.innerHTML = "";
+      if (currentDayLocations.length > 0) {
+        currentDayLocations.forEach(loc => {
+          const item = document.createElement('div');
+          item.className = 'destination-item';
+          item.textContent = loc.name;
+          item.onclick = () => {
+            flyToLocation(loc);
+            showDestinationDetails(loc);
+          };
+          destMenu.appendChild(item);
+        });
+      }
+      
+      // Remove any existing route and markers
+      if (currentRouteLayer) {
+        if (map.getLayer('route')) map.removeLayer('route');
+        if (map.getSource('route')) map.removeSource('route');
+        currentRouteLayer = null;
+      }
+      if (map.getLayer('day-points-layer')) {
+        map.removeLayer('day-points-layer');
+      }
+      if (map.getSource('day-points')) {
+        map.removeSource('day-points');
+      }
+      
+      if (currentDayLocations.length > 0) {
+        drawRoute(currentDayLocations);
+        const features = currentDayLocations.map(loc => ({
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: loc.coords },
+          properties: {
+            name: loc.name,
+            info: loc.info,
+            image: loc.image
+          }
+        }));
+        const geojson = {
+          type: 'FeatureCollection',
+          features: features
+        };
+        map.addSource('day-points', { type: 'geojson', data: geojson });
+        map.addLayer({
+          id: 'day-points-layer',
+          type: 'circle',
+          source: 'day-points',
+          paint: {
+            'circle-radius': 8,
+            'circle-color': '#222222',
+            'circle-stroke-color': '#ffffff',
+            'circle-stroke-width': 2
+          }
+        });
+        map.on('click', 'day-points-layer', onPointClick);
+        map.on('mouseenter', 'day-points-layer', () => {
+          map.getCanvas().style.cursor = 'pointer';
+        });
+        map.on('mouseleave', 'day-points-layer', () => {
+          map.getCanvas().style.cursor = '';
+        });
+      }
+      
+      // Fit the map bounds to show all destinations
+      if (currentDayLocations.length > 0) {
+        const bounds = new mapboxgl.LngLatBounds();
+        currentDayLocations.forEach(loc => bounds.extend(loc.coords));
+        map.fitBounds(bounds, { padding: 50, maxZoom: 10 });
+      }
+      
+      // Switch screens: hide day-selection and show day-details
+      document.getElementById('day-selection').style.display = 'none';
+      document.getElementById('day-details').style.display = 'block';
+      document.getElementById('destination-details').style.display = 'none';
+      
+      // Restore default layout for days (sidebar 35%, map 65%)
+      document.getElementById('sidebar').classList.remove('half', 'full');
+      document.getElementById('map').classList.remove('half', 'hide');
+    }
+    
+    // When a point is clicked on the map, show its details in location mode (50/50 split)
+    function onPointClick(e) {
+      const features = map.queryRenderedFeatures(e.point, { layers: ['day-points-layer'] });
+      if (!features.length) return;
+      const feature = features[0];
+      const props = feature.properties;
+      const loc = {
+        name: props.name,
+        info: props.info,
+        image: props.image,
+        coords: feature.geometry.coordinates
+      };
+      flyToLocation(loc);
+      showDestinationDetails(loc);
+    }
+    
+    // Draw route using Mapbox Directions API
+    function drawRoute(locations) {
+      const coordsStr = locations.map(loc => loc.coords.join(',')).join(';');
+      const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordsStr}?geometries=geojson&access_token=${mapboxgl.accessToken}`;
+      fetch(url)
+        .then(response => response.json())
+        .then(data => {
+          if (data.routes && data.routes.length > 0) {
+            const route = data.routes[0].geometry;
+            map.addSource('route', {
+              type: 'geojson',
+              data: {
+                type: 'Feature',
+                properties: {},
+                geometry: route
+              }
+            });
+            map.addLayer({
+              id: 'route',
+              type: 'line',
+              source: 'route',
+              layout: {
+                'line-join': 'round',
+                'line-cap': 'round'
+              },
+              paint: {
+                'line-color': '#333333',
+                'line-width': 6
+              }
+            });
+            currentRouteLayer = 'route';
+          }
+        })
+        .catch(err => console.error(err));
+    }
+    
+    // Fly-to animation with a moderate pitch for a more overhead view
+    function flyToLocation(loc) {
+      map.flyTo({
+        center: loc.coords,
+        zoom: 12.5,
+        pitch: 30,
+        bearing: 0,
+        speed: 1.2,
+        curve: 1.8
+      });
+      // Disable map interactions once a point is clicked
+      map.dragPan.disable();
+      map.dragRotate.disable();
+      map.scrollZoom.disable();
+      map.doubleClickZoom.disable();
+      map.touchZoomRotate.disable();
+    }
+    
+    // Show destination details and switch to the Destination Details screen in 50/50 layout
+    function showDestinationDetails(loc) {
+      // Apply half layout for both sidebar and map
+      document.getElementById('sidebar').classList.add('half');
+      document.getElementById('map').classList.add('half');
+      
+      const infoDiv = document.getElementById('place-info');
+      infoDiv.innerHTML = `<h3>${loc.name}</h3><p>${loc.info}</p>` +
+                          (loc.image ? `<img src="${loc.image}" alt="${loc.name}">` : '');
+      document.getElementById('day-details').style.display = 'none';
+      document.getElementById('destination-details').style.display = 'block';
+    }
+    
+    /* --- FISHING GUIDE FUNCTIONS --- */
+    function populateFishingGuide() {
+      const speciesMenu = document.getElementById('fishing-species-menu');
+      speciesMenu.innerHTML = "";
+      for (let species in window.fishingGuideData) {
+        const item = document.createElement('div');
+        item.className = 'species-item';
+        item.textContent = window.fishingGuideData[species].name;
+        item.onclick = () => {
+          showFishingDetail(window.fishingGuideData[species]);
+        };
+        speciesMenu.appendChild(item);
+      }
+    }
+    
+    function showFishingDetail(speciesData) {
+      const textDiv = document.getElementById('fishing-info-text');
+      const imageDiv = document.getElementById('fishing-info-image');
+      textDiv.innerHTML = `<h3>${speciesData.name}</h3>
+<p><strong>How to Catch:</strong> ${speciesData.howToCatch}</p>
+<p><strong>Taste:</strong> ${speciesData.taste}</p>
+<p><strong>Fun Fact:</strong> ${speciesData.funFact}</p>`;
+      imageDiv.innerHTML = speciesData.image ? `<img src="${speciesData.image}" alt="${speciesData.name}">` : "";
+      document.getElementById('fishing-guide').style.display = 'none';
+      document.getElementById('fishing-detail').style.display = 'block';
+      // Expand sidebar to full and hide map for fishing detail
+      document.getElementById('sidebar').classList.add('full');
+      document.getElementById('map').classList.add('hide');
+    }
+    
+    /* --- SCREEN SWITCHING FOR FISHING GUIDE --- */
+    document.getElementById('to-fishing-guide').addEventListener('click', () => {
+      document.getElementById('day-selection').style.display = 'none';
+      document.getElementById('day-details').style.display = 'none';
+      document.getElementById('destination-details').style.display = 'none';
+      document.getElementById('fishing-guide').style.display = 'block';
+      populateFishingGuide();
+      // Expand sidebar fully and hide map for fishing guide
+      document.getElementById('sidebar').classList.add('full');
+      document.getElementById('map').classList.add('hide');
+    });
+    
+    document.getElementById('back-to-days-from-fishing').addEventListener('click', () => {
+      document.getElementById('fishing-guide').style.display = 'none';
+      document.getElementById('day-selection').style.display = 'block';
+      // Restore default layout
+      document.getElementById('sidebar').classList.remove('full');
+      document.getElementById('map').classList.remove('hide');
+    });
+    
+    document.getElementById('back-to-fishing-guide').addEventListener('click', () => {
+      document.getElementById('fishing-detail').style.display = 'none';
+      document.getElementById('fishing-guide').style.display = 'block';
+    });
+    
+    /* --- BACK BUTTON EVENT LISTENERS FOR DAY SCREENS --- */
+    document.getElementById('back-to-days').addEventListener('click', () => {
+      // Re-enable map interactions
+      map.dragPan.enable();
+      map.dragRotate.enable();
+      map.scrollZoom.enable();
+      map.doubleClickZoom.enable();
+      map.touchZoomRotate.enable();
+      document.getElementById('day-details').style.display = 'none';
+      document.getElementById('destination-details').style.display = 'none';
+      document.getElementById('day-selection').style.display = 'block';
+      if (currentDayLocations.length > 0) {
+        const bounds = new mapboxgl.LngLatBounds();
+        currentDayLocations.forEach(loc => bounds.extend(loc.coords));
+        map.fitBounds(bounds, { padding: 50, maxZoom: 10 });
+      }
+      // Restore default layout for days
+      document.getElementById('sidebar').classList.remove('half', 'full');
+      document.getElementById('map').classList.remove('half', 'hide');
+    });
+    
+    document.getElementById('back-to-day-details').addEventListener('click', () => {
+      // Re-enable map interactions
+      map.dragPan.enable();
+      map.dragRotate.enable();
+      map.scrollZoom.enable();
+      map.doubleClickZoom.enable();
+      map.touchZoomRotate.enable();
+      document.getElementById('destination-details').style.display = 'none';
+      document.getElementById('day-details').style.display = 'block';
+      if (currentDayLocations.length > 0) {
+        const bounds = new mapboxgl.LngLatBounds();
+        currentDayLocations.forEach(loc => bounds.extend(loc.coords));
+        map.fitBounds(bounds, { padding: 50, maxZoom: 10 });
+      }
+      // Revert sidebar and map to default layout
+      document.getElementById('sidebar').classList.remove('half');
+      document.getElementById('map').classList.remove('half');
+    });
+  </script>
+</body>
+</html>
